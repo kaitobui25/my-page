@@ -1,0 +1,16 @@
+{
+  "name": "Your Name",
+  "role": {
+    "vi": "Automation Engineer",
+    "en": "Automation Engineer",
+    "ja": "オートメーションエンジニア"
+  },
+  "country": "Japan",
+  "languages": ["vi", "ja", "en"],
+  "intro": {
+    "vi": "Làm việc trong lĩnh vực industrial automation, với PLC, industrial network, commissioning và troubleshooting trong nhà máy thực tế.",
+    "en": "Industrial automation field notes covering PLCs, industrial networks, commissioning and troubleshooting.",
+    "ja": "PLC、産業用ネットワーク、コミッショニング、トラブルシューティングの実務メモ。"
+  },
+  "contact": ["GitHub", "LinkedIn", "Email"]
+}

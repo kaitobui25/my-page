@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["id", "labels"],
+  "properties": {
+    "id": { "type": "string" },
+    "labels": {
+      "type": "object",
+      "properties": {
+        "vi": { "type": "string" },
+        "en": { "type": "string" },
+        "ja": { "type": "string" }
+      }
+    },
+    "aliases": { "type": "array", "items": { "type": "string" } }
+  }
+}

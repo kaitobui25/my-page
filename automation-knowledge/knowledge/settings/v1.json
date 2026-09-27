@@ -1,0 +1,7 @@
+{
+  "sourceLanguage": "vi",
+  "enabledContentLanguages": ["vi"],
+  "preparedContentLanguages": ["vi", "en", "ja"],
+  "adminAuthentication": "deferred-to-post-v1",
+  "aiFeatures": "deferred-to-v2"
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["imageId", "objects"],
+  "properties": {
+    "imageId": { "type": "string" },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "x", "y", "color"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "enum": ["rectangle", "arrow", "text", "freehand"] },
+          "x": { "type": "number", "minimum": 0, "maximum": 1 },
+          "y": { "type": "number", "minimum": 0, "maximum": 1 },
+          "width": { "type": "number", "minimum": 0, "maximum": 1 },
+          "height": { "type": "number", "minimum": 0, "maximum": 1 },
+          "color": { "enum": ["red", "blue", "green", "yellow"] }
+        }
+      }
+    }
+  }
+}

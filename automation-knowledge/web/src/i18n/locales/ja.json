@@ -1,0 +1,11 @@
+{
+  "nav.home": "ホーム",
+  "nav.about": "概要",
+  "nav.admin": "管理",
+  "common.search": "検索",
+  "common.publish": "公開",
+  "common.saved": "保存済み",
+  "article.updated": "更新",
+  "article.related": "関連記事",
+  "article.unavailable": "V1ではこの翻訳はまだ利用できません。"
+}

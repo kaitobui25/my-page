@@ -1,0 +1,12 @@
+[
+  { "id": "plc", "labels": { "vi": "PLC", "en": "PLC", "ja": "PLC" } },
+  {
+    "id": "industrial-network",
+    "labels": {
+      "vi": "Mạng công nghiệp",
+      "en": "Industrial Network",
+      "ja": "産業用ネットワーク"
+    }
+  },
+  { "id": "motion", "labels": { "vi": "Motion", "en": "Motion", "ja": "モーション" } }
+]

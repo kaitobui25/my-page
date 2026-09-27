@@ -1,0 +1,11 @@
+{
+  "nav.home": "Home",
+  "nav.about": "About",
+  "nav.admin": "Admin",
+  "common.search": "Search",
+  "common.publish": "Publish",
+  "common.saved": "Saved",
+  "article.updated": "Updated",
+  "article.related": "Related Articles",
+  "article.unavailable": "This translation is not available in V1."
+}
