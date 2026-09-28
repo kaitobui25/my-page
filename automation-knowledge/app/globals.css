@@ -1,0 +1,60 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../vendor/shadcn-tailwind-4.13.0.css";
+@import "../web/src/styles/global.css";
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
+@theme inline {
+  --color-background: var(--color-paper);
+  --color-foreground: var(--color-ink);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-ink);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-ink);
+  --color-primary: var(--color-ink);
+  --color-primary-foreground: var(--color-paper);
+  --color-secondary: var(--color-canvas);
+  --color-secondary-foreground: var(--color-ink);
+  --color-muted: var(--color-canvas);
+  --color-muted-foreground: var(--color-ink-soft);
+  --color-accent: var(--color-accent-soft);
+  --color-accent-foreground: var(--color-accent);
+  --color-destructive: var(--color-deprecated);
+  --color-border: var(--color-line);
+  --color-input: var(--color-line);
+  --color-ring: var(--color-accent);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--color-surface);
+  --color-sidebar-foreground: var(--color-ink);
+  --color-sidebar-primary: var(--color-accent);
+  --color-sidebar-primary-foreground: var(--color-paper);
+  --color-sidebar-accent: var(--color-accent-soft);
+  --color-sidebar-accent-foreground: var(--color-accent);
+  --color-sidebar-border: var(--color-line);
+  --color-sidebar-ring: var(--color-accent);
+  --radius-sm: calc(var(--radius-control) - 4px);
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-card);
+  --radius-xl: var(--radius-search);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
+}
