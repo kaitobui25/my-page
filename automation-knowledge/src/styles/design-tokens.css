@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Playpen+Sans:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Playpen+Sans:wght@300;400;500;600&display=swap");
 
 :root {
   color-scheme: light;
@@ -40,13 +40,17 @@
   --notebook-quote: rgba(255, 248, 204, 0.62);
   --notebook-line-gap: 32px;
   --notebook-margin-offset: 56px;
-  --notebook-body-size: 21px;
+  --notebook-body-size: 19px;
   --notebook-title-size: 30px;
   --notebook-h1-size: 24px;
   --notebook-h2-size: 21px;
   --notebook-title-line-height: 40px;
   --notebook-h1-line-height: 34px;
   --notebook-h2-line-height: 30px;
+  --notebook-note-size: 0.9em;
+  --notebook-note-weight: 300;
+  --notebook-note-style: italic;
+  --notebook-note-line-height: 1.55;
   --notebook-paper-shadow: 0 18px 50px rgba(48, 39, 27, 0.08);
   --notebook-image-frame: rgba(70, 63, 54, 0.16);
   --notebook-image-shadow: 0 6px 18px rgba(48, 39, 27, 0.07);

@@ -363,6 +363,10 @@ a.chip:hover, a.chip:focus-visible { border-color: var(--color-accent); color: v
   border-left: 4px solid var(--article-theme-h1, var(--color-accent));
   background: var(--article-paper-quote);
   padding: var(--space-5) var(--space-6);
+  font-size: var(--notebook-note-size);
+  font-style: var(--notebook-note-style);
+  font-weight: var(--notebook-note-weight);
+  line-height: var(--notebook-note-line-height);
   white-space: pre-wrap;
 }
 
