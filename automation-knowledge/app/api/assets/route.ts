@@ -1,4 +1,9 @@
 import { env } from "cloudflare:workers";
+import { getArticleAssetPrefix, isSafeStorageSegment } from "@/domain/knowledge/storage/articleAssets";
+
+const IMAGE_VARIANTS = new Set(["original", "400", "1200", "2200"]);
+const IMAGE_CONTENT_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
 
 function extensionFor(type: string) {
   if (type.includes("png")) return "png";
@@ -19,8 +24,16 @@ export async function POST(request: Request) {
     if (!articleId || !assetId || !(file instanceof File)) {
       return Response.json({ error: "articleId, assetId and file are required." }, { status: 400 });
     }
-    if (!/^[a-zA-Z0-9_-]+$/.test(articleId) || !/^[a-zA-Z0-9_-]+$/.test(assetId) || !["original", "400", "1200", "2200"].includes(variant) || !["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 20 * 1024 * 1024) return Response.json({ error: "Unsupported image or upload larger than 20 MB" }, { status: 400 });
-    const key = `articles/${articleId}/images/${variant}/${assetId}.${extensionFor(file.type)}`;
+    if (
+      !isSafeStorageSegment(articleId) ||
+      !isSafeStorageSegment(assetId) ||
+      !IMAGE_VARIANTS.has(variant) ||
+      !IMAGE_CONTENT_TYPES.has(file.type) ||
+      file.size > MAX_IMAGE_SIZE_BYTES
+    ) {
+      return Response.json({ error: "Unsupported image or upload larger than 20 MB" }, { status: 400 });
+    }
+    const key = `${getArticleAssetPrefix(articleId)}images/${variant}/${assetId}.${extensionFor(file.type)}`;
     await env.BUCKET.put(key, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type || "application/octet-stream" },
     });

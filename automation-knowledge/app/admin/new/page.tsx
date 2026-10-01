@@ -1,4 +1,4 @@
-import { CanvasEditor } from "../../../web/src/features/canvas-editor/CanvasEditor";
+import { CanvasEditor } from "@/features/canvas-editor/CanvasEditor";
 
 export const dynamic = "force-dynamic";
 

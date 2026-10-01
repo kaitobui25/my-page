@@ -1,9 +1,9 @@
 import { eq } from "drizzle-orm";
-import { getDb } from "../../../../../db";
-import { articles } from "../../../../../db/schema";
-import { buildMarkdown } from "../../../../../web/src/knowledge/publish/buildMarkdown";
-import { validateArticle } from "../../../../../web/src/knowledge/validate/validateArticle";
-import type { KnowledgeArticle } from "../../../../../web/src/knowledge/types";
+import { getDb } from "@/server/db";
+import { articles } from "@/server/db/schema";
+import { buildMarkdown } from "@/domain/knowledge/publish/buildMarkdown";
+import { validateArticle } from "@/domain/knowledge/validate/validateArticle";
+import type { KnowledgeArticle } from "@/domain/knowledge/types";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

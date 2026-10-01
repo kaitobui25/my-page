@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
-import { isLocale } from "../../../web/src/i18n/config";
-import { listPublishedArticles } from "../../../web/src/knowledge/read/server";
-import { AboutPage } from "../../../web/src/pages/about/AboutPage";
+import { isLocale } from "@/i18n/config";
+import { listPublishedArticles } from "@/domain/knowledge/read/server";
+import { AboutPage } from "@/views/about/AboutPage";
 
 export const dynamic = "force-dynamic";
 

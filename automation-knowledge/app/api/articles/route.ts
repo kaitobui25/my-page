@@ -1,8 +1,8 @@
 import { desc, eq } from "drizzle-orm";
-import { getDb } from "../../../db";
-import { articles } from "../../../db/schema";
-import type { KnowledgeArticle } from "../../../web/src/knowledge/types";
-import { getDraftById, normalizeRow } from "../../../web/src/knowledge/read/server";
+import { getDb } from "@/server/db";
+import { articles } from "@/server/db/schema";
+import type { KnowledgeArticle } from "@/domain/knowledge/types";
+import { getDraftById, normalizeRow } from "@/domain/knowledge/read/server";
 
 function toStoredValues(article: KnowledgeArticle) {
   const updatedAt = new Date().toISOString();

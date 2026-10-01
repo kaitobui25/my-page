@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
-import { isLocale } from "../../../../web/src/i18n/config";
+import { isLocale } from "@/i18n/config";
 import {
   getArticleBySlug,
   listPublishedArticles,
-} from "../../../../web/src/knowledge/read/server";
-import { ArticlePage } from "../../../../web/src/pages/article/ArticlePage";
+} from "@/domain/knowledge/read/server";
+import { ArticlePage } from "@/views/article/ArticlePage";
 
 export const dynamic = "force-dynamic";
 
