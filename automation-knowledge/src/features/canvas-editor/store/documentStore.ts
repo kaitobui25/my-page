@@ -70,8 +70,108 @@ const articleId = `art_${Math.random().toString(36).slice(2, 9)}`;
 export const DEFAULT_SECTION_HEIGHT = 420;
 const SECTION_GROW_STEP = DEFAULT_SECTION_HEIGHT * 0.5;
 const SECTION_BOTTOM_PADDING = 40;
+const SECTION_SIDE_PADDING = 24;
+const SECTION_VERTICAL_GAP = 40;
+const BLOCK_VERTICAL_GAP = 16;
+const RIGHT_EDGE_TOLERANCE = 32;
 const HEADING_INSERT_GAP = 60;
 const HEADING_HEIGHT = 40;
+
+function isDuplicableTextBlock(object: CanvasObject | undefined) {
+  return Boolean(object && (object.type === "text" || object.type === "note") && object.role !== "heading");
+}
+
+function overlapsHorizontally(a: LayoutMap[string], b: LayoutMap[string]) {
+  return a.x < b.x + b.width && a.x + a.width > b.x;
+}
+
+function normalizeMemberWidth(
+  document: EditorDocument,
+  layout: LayoutMap,
+  objectId: string,
+  previousItem?: LayoutMap[string],
+  previousSection?: LayoutMap[string],
+  preserveRightEdge = false
+) {
+  const object = document.objects.find(item => item.id === objectId);
+  if (!object?.sectionId || object.type === "image" || object.type === "arrow") return layout;
+  const section = layout[object.sectionId];
+  const item = layout[objectId];
+  if (!section || !item) return layout;
+
+  const innerLeft = section.x + SECTION_SIDE_PADDING;
+  const innerRight = section.x + section.width - SECTION_SIDE_PADDING;
+  const maxWidth = Math.max(48, innerRight - innerLeft);
+  const x = Math.max(innerLeft, Math.min(item.x, innerRight - 48));
+  const oldSection = previousSection ?? section;
+  const oldRight = oldSection.x + oldSection.width - SECTION_SIDE_PADDING;
+  const wasRightAligned = previousItem
+    ? Math.abs(previousItem.x + previousItem.width - oldRight) <= RIGHT_EDGE_TOLERANCE
+    : false;
+  const availableWidth = Math.max(48, innerRight - x);
+  const width = (preserveRightEdge && wasRightAligned) || x + item.width > innerRight
+    ? availableWidth
+    : Math.min(item.width, maxWidth);
+
+  if (x === item.x && width === item.width) return layout;
+  return { ...layout, [objectId]: { ...item, x, width } };
+}
+
+function reflowSectionBelow(document: EditorDocument, layout: LayoutMap, objectId: string) {
+  const object = document.objects.find(item => item.id === objectId);
+  if (!object?.sectionId || !layout[objectId]) return layout;
+  const sectionId = object.sectionId;
+  const memberIds = document.objects
+    .filter(item => item.sectionId === sectionId && item.id !== objectId)
+    .map(item => item.id);
+  const moved = { ...layout };
+  const queue = [objectId];
+
+  while (queue.length) {
+    const sourceId = queue.shift();
+    if (!sourceId) break;
+    const source = moved[sourceId];
+    if (!source) continue;
+    for (const candidateId of memberIds) {
+      if (candidateId === sourceId) continue;
+      const candidate = moved[candidateId];
+      if (!candidate || candidate.y < source.y || !overlapsHorizontally(source, candidate)) continue;
+      const minimumY = source.y + source.height + BLOCK_VERTICAL_GAP;
+      if (candidate.y >= minimumY) continue;
+      moved[candidateId] = { ...candidate, y: minimumY };
+      queue.push(candidateId);
+    }
+  }
+
+  return moved;
+}
+
+function reflowSectionsBelow(document: EditorDocument, layout: LayoutMap, sectionId: string) {
+  const source = layout[sectionId];
+  if (!source) return layout;
+  const moved = { ...layout };
+  let previousBottom = source.y + source.height;
+  const sections = document.objects
+    .filter(object => object.type === "section" && object.id !== sectionId && layout[object.id]?.y >= source.y)
+    .sort((a, b) => (layout[a.id]?.y ?? 0) - (layout[b.id]?.y ?? 0));
+
+  for (const section of sections) {
+    const item = moved[section.id];
+    if (!item || !overlapsHorizontally(source, item)) continue;
+    const minimumY = previousBottom + SECTION_VERTICAL_GAP;
+    if (item.y < minimumY) {
+      const dy = minimumY - item.y;
+      moved[section.id] = { ...item, y: item.y + dy };
+      for (const member of document.objects.filter(object => object.sectionId === section.id)) {
+        const memberLayout = moved[member.id];
+        if (memberLayout) moved[member.id] = { ...memberLayout, y: memberLayout.y + dy };
+      }
+    }
+    previousBottom = Math.max(previousBottom, moved[section.id].y + moved[section.id].height);
+  }
+
+  return moved;
+}
 
 function growParentSection(document: EditorDocument, layout: LayoutMap, objectId: string) {
   const object = document.objects.find(item => item.id === objectId);
@@ -275,17 +375,38 @@ export const useDocumentStore = create<EditorState>((set, get) => ({
   updateLayout: (id, patch, pushHistory = true) =>
     set((state) => {
       const section = state.document.objects.find(object => object.id === id && object.type === "section");
+      const object = state.document.objects.find(item => item.id === id);
+      const previousItem = state.layout[id];
       const moved = { ...state.layout };
       if (section && (patch.x !== undefined || patch.y !== undefined)) {
         const dx = (patch.x ?? moved[id].x) - moved[id].x;
         const dy = (patch.y ?? moved[id].y) - moved[id].y;
         for (const object of state.document.objects.filter(object => object.sectionId === id)) if (moved[object.id]) moved[object.id] = { ...moved[object.id], x: moved[object.id].x + dx, y: moved[object.id].y + dy };
       }
-      const layout = growParentSection(
-        state.document,
-        { ...moved, [id]: { ...state.layout[id], ...patch } },
-        id
-      );
+      let layout = { ...moved, [id]: { ...state.layout[id], ...patch } };
+
+      if (section && patch.width !== undefined && previousItem) {
+        for (const member of state.document.objects.filter(item => item.sectionId === id)) {
+          layout = normalizeMemberWidth(state.document, layout, member.id, state.layout[member.id], previousItem, true);
+        }
+      } else if (object?.sectionId && previousItem) {
+        const widthChanged = patch.width !== undefined && Math.abs(patch.width - previousItem.width) >= 0.5;
+        layout = normalizeMemberWidth(
+          state.document,
+          layout,
+          id,
+          previousItem,
+          state.layout[object.sectionId],
+          !widthChanged
+        );
+        layout = reflowSectionBelow(state.document, layout, id);
+      }
+
+      const affectedSectionId = object?.sectionId ?? (section ? id : undefined);
+      layout = object?.sectionId
+        ? growSectionForMembers(state.document, layout, object.sectionId)
+        : growParentSection(state.document, layout, id);
+      if (affectedSectionId) layout = reflowSectionsBelow(state.document, layout, affectedSectionId);
       return {
       ...(pushHistory ? withHistory(state) : {}),
       layout,
@@ -294,12 +415,12 @@ export const useDocumentStore = create<EditorState>((set, get) => ({
   duplicateSelected: () =>
     set((state) => {
       const source = state.document.objects.find(object => object.id === state.selectedId);
-      if (!source || (source.type !== "note" && source.type !== "image")) return state;
+      if (!source || (!isDuplicableTextBlock(source) && source.type !== "image")) return state;
       const sourceLayout = state.layout[source.id];
       if (!sourceLayout) return state;
 
       const uniqueId = crypto.randomUUID();
-      const id = source.type === "image" ? `img_${uniqueId}` : `note_${uniqueId}`;
+      const id = source.type === "image" ? `img_${uniqueId}` : `${source.type}_${uniqueId}`;
       const copy: CanvasObject = {
         ...source,
         id,

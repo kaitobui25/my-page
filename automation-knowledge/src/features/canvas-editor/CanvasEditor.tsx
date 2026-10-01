@@ -26,6 +26,48 @@ const toolLabels = [
   ["hand", Hand, "Pan"],
 ] as const;
 
+function isBodyTextBlock(object: { type: string; role?: string } | null | undefined) {
+  return Boolean(object && (object.type === "text" || object.type === "note") && object.role !== "heading");
+}
+
+function measureTextEditorContent(editor: HTMLTextAreaElement) {
+  const style = window.getComputedStyle(editor);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+
+  context.font = [
+    style.fontStyle,
+    style.fontVariant,
+    style.fontWeight,
+    style.fontSize,
+    style.fontFamily,
+  ].join(" ");
+
+  const lines = editor.value.split("\n");
+  const textWidth = lines.reduce(
+    (max, line) => Math.max(max, context.measureText(line).width),
+    0
+  );
+  const fontSize = Number.parseFloat(style.fontSize) || 14;
+  const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.35;
+  const horizontalChrome =
+    Number.parseFloat(style.paddingLeft) +
+    Number.parseFloat(style.paddingRight) +
+    Number.parseFloat(style.borderLeftWidth) +
+    Number.parseFloat(style.borderRightWidth);
+  const verticalChrome =
+    Number.parseFloat(style.paddingTop) +
+    Number.parseFloat(style.paddingBottom) +
+    Number.parseFloat(style.borderTopWidth) +
+    Number.parseFloat(style.borderBottomWidth);
+
+  return {
+    width: Math.ceil(textWidth + horizontalChrome),
+    height: Math.ceil(Math.max(1, lines.length) * lineHeight + verticalChrome),
+  };
+}
+
 function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
   const activeTool = useDocumentStore((state) => state.activeTool);
@@ -130,7 +172,7 @@ function Inspector() {
               </label>
             </>
           ) : null}
-          {(selected.type === "note" || selected.type === "image") && (
+          {(isBodyTextBlock(selected) || selected.type === "image") && (
             <button className="admin-action-button inspector-action" onClick={duplicateSelected} type="button">
               Copy
             </button>
@@ -209,6 +251,7 @@ function CanvasStage() {
   const articleId = useDocumentStore((state) => state.articleId);
   const stageRef = useRef<Konva.Stage>(null);
   const editRef = useRef<HTMLTextAreaElement | null>(null);
+  const headingInsertCloseTimer = useRef<number | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [headingEditingId, setHeadingEditingId] = useState<string | null>(null);
   const [headingDraft, setHeadingDraft] = useState("");
@@ -216,6 +259,7 @@ function CanvasStage() {
   const [annotationDrawColor, setAnnotationDrawColor] = useState<AnnotationColor | null>(null);
   const [arrowDraft, setArrowDraft] = useState<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
   const canvasTheme = useCanvasThemeTokens();
+  const selectedObject = selectedId ? document.objects.find(object => object.id === selectedId) : undefined;
   const selectedLayout = selectedId ? layout[selectedId] : undefined;
   const editingObject = editingId ? document.objects.find(object => object.id === editingId) : undefined;
   const editingLayout = editingId ? layout[editingId] : undefined;
@@ -274,12 +318,33 @@ function CanvasStage() {
 
   useEffect(() => {
     const editor = editRef.current;
-    if (!editor || editingObject?.type !== "note" || !editingId || !editingLayout) return;
-    const contentHeight = Math.max(96, Math.ceil(editor.scrollHeight / zoom));
-    if (contentHeight > editingLayout.height) {
-      updateLayout(editingId, { height: contentHeight }, false);
-    }
-  }, [editingId, editingLayout, editingObject?.text, editingObject?.type, updateLayout, zoom]);
+    if (!editor || !editingId) return;
+
+    let frame: number | null = null;
+    const observer = new ResizeObserver(() => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const currentEditor = editRef.current;
+        const currentLayout = useDocumentStore.getState().layout[editingId];
+        if (!currentEditor || !currentLayout) return;
+
+        const width = Math.max(48, currentEditor.offsetWidth / zoom);
+        const height = Math.max(36, currentEditor.offsetHeight / zoom);
+        if (
+          Math.abs(width - currentLayout.width) < 0.5 &&
+          Math.abs(height - currentLayout.height) < 0.5
+        ) return;
+
+        updateLayout(editingId, { width, height }, false);
+      });
+    });
+
+    observer.observe(editor);
+    return () => {
+      observer.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [editingId, updateLayout, zoom]);
 
   useEffect(() => {
     const onPaste = async (event: ClipboardEvent) => {
@@ -310,13 +375,17 @@ function CanvasStage() {
         type,
         sectionId: document.objects.find(section => section.type === "section" && layout[section.id] && x >= layout[section.id].x && x <= layout[section.id].x + layout[section.id].width && y >= layout[section.id].y && y <= layout[section.id].y + layout[section.id].height)?.id,
         reader: type !== "arrow",
-        text: type === "note" ? "New field note" : "New text",
+        text: type === "note" ? "New note" : "New text",
       },
-      { x, y, width: type === "note" ? 260 : 360, height: 96, zIndex: 2 }
+      { x, y, width: 360, height: 96, zIndex: 2 }
     );
   }
 
   function addHeadingAt(sectionId: string, y: number, level: 1 | 2) {
+    if (headingInsertCloseTimer.current !== null) {
+      window.clearTimeout(headingInsertCloseTimer.current);
+      headingInsertCloseTimer.current = null;
+    }
     const id = `heading_${crypto.randomUUID()}`;
     insertHeading(id, sectionId, y, level);
     setHeadingDraft("");
@@ -324,11 +393,47 @@ function CanvasStage() {
     setHeadingInsert(null);
   }
 
+  function cancelHeadingInsertClose() {
+    if (headingInsertCloseTimer.current === null) return;
+    window.clearTimeout(headingInsertCloseTimer.current);
+    headingInsertCloseTimer.current = null;
+  }
+
+  function scheduleHeadingInsertClose(sectionId: string) {
+    cancelHeadingInsertClose();
+    headingInsertCloseTimer.current = window.setTimeout(() => {
+      setHeadingInsert(current => current?.sectionId === sectionId ? null : current);
+      headingInsertCloseTimer.current = null;
+    }, 180);
+  }
+
   function approveHeading() {
     if (!headingEditingId) return;
     useDocumentStore.getState().updateObject(headingEditingId, { text: headingDraft.trim() });
     setHeadingEditingId(null);
     setHeadingDraft("");
+  }
+
+  function finishTextEditing(editor: HTMLTextAreaElement) {
+    if (!editingId) return;
+    const measured = measureTextEditorContent(editor);
+    if (measured) {
+      updateLayout(editingId, {
+        width: Math.max(48, measured.width),
+        height: Math.max(36, measured.height),
+      });
+    }
+    setEditingId(null);
+  }
+
+  function updateTextEditing(editor: HTMLTextAreaElement) {
+    if (!editingId) return;
+    useDocumentStore.getState().updateObject(editingId, { text: editor.value }, false);
+
+    const measured = measureTextEditorContent(editor);
+    const currentLayout = useDocumentStore.getState().layout[editingId];
+    if (!measured || !currentLayout || measured.width <= currentLayout.width) return;
+    updateLayout(editingId, { width: Math.max(48, measured.width) }, false);
   }
 
   function finishArrowDraft(draft: { start: { x: number; y: number }; end: { x: number; y: number } }) {
@@ -379,10 +484,12 @@ function CanvasStage() {
           top: editingLayout.y * zoom + camera.y,
           width: editingLayout.width * zoom,
           height: editingLayout.height * zoom,
+          minWidth: 48 * zoom,
+          minHeight: 36 * zoom,
         }}
         value={editingObject.text ?? ""}
-        onChange={event => useDocumentStore.getState().updateObject(editingId, { text: event.target.value }, false)}
-        onBlur={() => setEditingId(null)}
+        onChange={event => updateTextEditing(event.currentTarget)}
+        onBlur={event => finishTextEditing(event.currentTarget)}
         onKeyDown={event => { if (event.key === "Escape") event.currentTarget.blur(); }}
       />}
       {headingEditingId && headingEditingLayout && (
@@ -537,6 +644,7 @@ function CanvasStage() {
                     x={52}
                     y={isH1 ? 7 : 9}
                     width={Math.max(80, itemLayout.width - 62)}
+                    height={Math.max(1, itemLayout.height - (isH1 ? 14 : 18))}
                     text={object.text || "Nhập heading..."}
                     fill={object.text ? canvasTheme?.ink : canvasTheme?.inkSoft}
                     fontStyle="bold"
@@ -569,7 +677,16 @@ function CanvasStage() {
                   stroke={selectedId === object.id ? canvasTheme?.accent : canvasTheme?.line}
                   cornerRadius={object.type === "note" ? 9 : 6}
                 />
-                <Text x={12} y={10} width={itemLayout.width - 24} text={object.text ?? ""} fill={canvasTheme?.ink} fontSize={14} lineHeight={1.35} />
+                <Text
+                  x={12}
+                  y={10}
+                  width={Math.max(1, itemLayout.width - 24)}
+                  height={Math.max(1, itemLayout.height - 20)}
+                  text={object.text ?? ""}
+                  fill={canvasTheme?.ink}
+                  fontSize={14}
+                  lineHeight={1.35}
+                />
               </Group>
             );
           })}
@@ -585,9 +702,7 @@ function CanvasStage() {
                 key={`heading-gutter-${section.id}`}
                 x={sectionLayout.x}
                 y={sectionLayout.y}
-                onMouseLeave={() => {
-                  if (headingInsert?.sectionId === section.id) setHeadingInsert(null);
-                }}
+                onMouseLeave={() => scheduleHeadingInsertClose(section.id)}
               >
                 <Rect
                   name="heading-gutter"
@@ -597,6 +712,7 @@ function CanvasStage() {
                   height={sectionLayout.height}
                   fill={canvasTheme?.accentGhost}
                   onMouseMove={event => {
+                    cancelHeadingInsertClose();
                     const point = event.currentTarget.getRelativePointerPosition();
                     if (!point) return;
                     setHeadingInsert({ sectionId: section.id, y: sectionLayout.y + point.y });
@@ -608,6 +724,8 @@ function CanvasStage() {
                     <Group
                       x={0}
                       y={Math.max(2, Math.min(sectionLayout.height - 34, localY - 16))}
+                      onMouseEnter={cancelHeadingInsertClose}
+                      onMouseLeave={() => scheduleHeadingInsertClose(section.id)}
                       onMouseDown={event => { event.cancelBubble = true; }}
                     >
                       <Group onClick={event => { event.cancelBubble = true; addHeadingAt(section.id, activeInsert.y, 1); }}>
@@ -637,6 +755,8 @@ function CanvasStage() {
           <Transformer
             ref={transformerRef}
             rotateEnabled={false}
+            flipEnabled={false}
+            keepRatio={selectedObject?.type === "image"}
             onTransformEnd={() => {
               if (!selectedId) return;
               const node = nodeRefs.current[selectedId];

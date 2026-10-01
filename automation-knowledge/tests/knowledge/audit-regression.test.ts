@@ -15,6 +15,103 @@ test("Multiline notes remain blockquotes", () => assert.ok(buildMarkdown(doc, la
 test("Images reference real asset URLs, not invented paths", () => { const imageDoc = structuredClone(doc); imageDoc.objects.push({ id: "img", type: "image", assetId: "asset", text: "Screen" }); assert.ok(buildMarkdown(imageDoc, layout, { asset: { id: "asset", original: "/api/assets/original.png", optimized1200: "/api/assets/article.webp" } }).includes("![Screen](/api/assets/article.webp#object=img)")); });
 test("Hidden objects and arrows are excluded", () => { const hidden = structuredClone(doc); hidden.objects[1].reader = false; hidden.objects.push({ id: "arrow", type: "arrow", text: "Arrow text" }); const md = buildMarkdown(hidden, layout); assert.ok(!md.includes("\n\nA")); assert.ok(!md.includes("Arrow text")); });
 test("Moving a section moves its members in one undo action", () => { const state = useDocumentStore.getState(); state.loadArticle(structuredClone(seedArticles[0])); const before = structuredClone(useDocumentStore.getState().layout); state.updateLayout("sec_problem", { x: before.sec_problem.x + 50 }); assert.equal(useDocumentStore.getState().layout.txt_problem.x, before.txt_problem.x + 50); state.undo(); assert.deepEqual(useDocumentStore.getState().layout, before); state.redo(); assert.equal(useDocumentStore.getState().layout.txt_problem.x, before.txt_problem.x + 50); });
+test("Resizing an upper block pushes overlapping blocks below it", () => {
+  const article = structuredClone(seedArticles[0]);
+  article.document.objects = [
+    { id: "section", type: "section", title: "Section", order: 1 },
+    { id: "top", type: "text", text: "Top", sectionId: "section" },
+    { id: "bottom", type: "note", text: "Bottom", sectionId: "section" },
+  ];
+  article.layout = {
+    section: { x: 100, y: 80, width: 500, height: 260 },
+    top: { x: 124, y: 110, width: 452, height: 40 },
+    bottom: { x: 124, y: 170, width: 452, height: 60 },
+  };
+  const state = useDocumentStore.getState();
+  state.loadArticle(article);
+  state.updateLayout("top", { height: 120 });
+  assert.equal(useDocumentStore.getState().layout.bottom.y, 246);
+});
+test("Right-aligned text blocks stay fitted to the section while moving", () => {
+  const article = structuredClone(seedArticles[0]);
+  article.document.objects = [
+    { id: "section", type: "section", title: "Section", order: 1 },
+    { id: "heading", type: "text", role: "heading", text: "Heading", sectionId: "section" },
+  ];
+  article.layout = {
+    section: { x: 100, y: 80, width: 500, height: 220 },
+    heading: { x: 124, y: 110, width: 452, height: 40 },
+  };
+  const state = useDocumentStore.getState();
+  state.loadArticle(article);
+  state.updateLayout("heading", { x: 200 });
+  assert.deepEqual(useDocumentStore.getState().layout.heading, { x: 200, y: 110, width: 376, height: 40 });
+});
+test("Manual width resize is preserved for a right-aligned text block", () => {
+  const article = structuredClone(seedArticles[0]);
+  article.document.objects = [
+    { id: "section", type: "section", title: "Section", order: 1 },
+    { id: "heading", type: "text", role: "heading", text: "Heading", sectionId: "section" },
+  ];
+  article.layout = {
+    section: { x: 100, y: 80, width: 500, height: 220 },
+    heading: { x: 124, y: 110, width: 452, height: 40 },
+  };
+  const state = useDocumentStore.getState();
+  state.loadArticle(article);
+  state.updateLayout("heading", { width: 280 });
+  assert.equal(useDocumentStore.getState().layout.heading.width, 280);
+});
+test("Body text and note share duplicate behavior while headings stay special", () => {
+  const article = structuredClone(seedArticles[0]);
+  article.document.objects = [
+    { id: "section", type: "section", title: "Section", order: 1 },
+    { id: "body", type: "text", text: "Body", sectionId: "section" },
+    { id: "note", type: "note", text: "Note", sectionId: "section" },
+    { id: "heading", type: "text", role: "heading", text: "Heading", sectionId: "section" },
+  ];
+  article.layout = {
+    section: { x: 100, y: 80, width: 500, height: 320 },
+    body: { x: 124, y: 110, width: 360, height: 96 },
+    note: { x: 124, y: 220, width: 360, height: 96 },
+    heading: { x: 124, y: 330, width: 360, height: 40 },
+  };
+  const state = useDocumentStore.getState();
+  state.loadArticle(article);
+
+  state.setSelected("body");
+  state.duplicateSelected();
+  assert.equal(useDocumentStore.getState().document.objects.filter(object => object.type === "text" && object.role !== "heading").length, 2);
+
+  state.setSelected("note");
+  state.duplicateSelected();
+  assert.equal(useDocumentStore.getState().document.objects.filter(object => object.type === "note").length, 2);
+
+  const countBeforeHeadingCopy = useDocumentStore.getState().document.objects.length;
+  state.setSelected("heading");
+  state.duplicateSelected();
+  assert.equal(useDocumentStore.getState().document.objects.length, countBeforeHeadingCopy);
+});
+test("Growing a section pushes the next section and its members down", () => {
+  const article = structuredClone(seedArticles[0]);
+  article.document.objects = [
+    { id: "first", type: "section", title: "First", order: 1 },
+    { id: "top", type: "text", text: "Top", sectionId: "first" },
+    { id: "second", type: "section", title: "Second", order: 2 },
+    { id: "below", type: "text", text: "Below", sectionId: "second" },
+  ];
+  article.layout = {
+    first: { x: 100, y: 80, width: 500, height: 180 },
+    top: { x: 124, y: 120, width: 452, height: 80 },
+    second: { x: 100, y: 300, width: 500, height: 180 },
+    below: { x: 124, y: 340, width: 452, height: 60 },
+  };
+  const state = useDocumentStore.getState();
+  state.loadArticle(article);
+  state.updateLayout("top", { height: 240 });
+  assert.equal(useDocumentStore.getState().layout.second.y, 510);
+  assert.equal(useDocumentStore.getState().layout.below.y, 550);
+});
 test("Deleting a section preserves its content outside sections", () => { const state = useDocumentStore.getState(); state.loadArticle(structuredClone(seedArticles[0])); state.setSelected("sec_problem"); state.deleteSelected(); assert.equal(useDocumentStore.getState().document.objects.find(object => object.id === "txt_problem")?.sectionId, undefined); });
 test("Reload keeps identity and removes obsolete blob preview URL", () => { const article = structuredClone(seedArticles[0]); article.assets = { image: { id: "image", original: "/api/assets/a.png", previewUrl: "blob:obsolete" } }; useDocumentStore.getState().loadArticle(article); const restored = useDocumentStore.getState().toArticle(); assert.equal(restored.meta.id, article.meta.id); assert.equal(restored.assets.image.previewUrl, undefined); assert.equal(restored.meta.createdAt, article.meta.createdAt); });
 test("Save acknowledgement cannot mark newer edits saved", async () => {
