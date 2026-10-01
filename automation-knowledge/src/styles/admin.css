@@ -218,10 +218,11 @@
 }
 
 .reader-preview {
+  grid-column: 2;
+  min-width: 0;
   height: calc(100vh - var(--height-topbar));
   overflow: auto;
-  max-width: var(--width-search-max);
-  margin: var(--space-8) auto;
+  margin: 0;
   border: 1px solid color-mix(in srgb, var(--article-paper-ink) 14%, transparent);
   border-radius: var(--radius-card);
   background-color: var(--article-paper);
@@ -230,8 +231,15 @@
     radial-gradient(circle at 78% 34%, color-mix(in srgb, var(--article-paper-ink) 4%, transparent) 0 1px, transparent 1.5px);
   background-size: 94px 94px, 128px 128px;
   box-shadow: var(--notebook-paper-shadow);
-  padding: var(--space-8);
+  padding: var(--space-11);
   color: var(--article-paper-ink);
+}
+
+@media (max-width: 940px) {
+  .reader-preview {
+    grid-column: 1;
+    padding: var(--space-7);
+  }
 }
 .editor-message { position: fixed; bottom: var(--space-5); left: var(--space-8); z-index: 30; background: var(--color-surface); padding: var(--space-4); border: 1px solid var(--color-line); }
 @media (max-width: 800px) {

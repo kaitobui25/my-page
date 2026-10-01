@@ -1099,7 +1099,7 @@ export function CanvasEditor() {
         </div>
       </header>
       {message && <div role="status" className="editor-message">{message}</div>}
-      {preview ? <section className="reader-preview" style={themeStyle}><h1 className="article-title">{title}</h1><ArticleBody markdown={buildMarkdown(document, layout, assets)} article={useDocumentStore.getState().toArticle()} /></section> :
+      {preview ? <section className="docs-layout reader-preview-layout"><section className="reader-preview" style={themeStyle}><h1 className="article-title">{title}</h1><ArticleBody markdown={buildMarkdown(document, layout, assets)} article={useDocumentStore.getState().toArticle()} /></section></section> :
       <section className="admin-workspace">
         <Toolbar />
         <CanvasStage />
