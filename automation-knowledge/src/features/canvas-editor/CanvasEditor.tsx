@@ -10,7 +10,7 @@ import { buildMarkdown } from "../../domain/knowledge/publish/buildMarkdown";
 import type { AnnotationColor, CanvasObject, KnowledgeArticle } from "../../domain/knowledge/types";
 import { ARTICLE_THEME_OPTIONS, getArticleThemeStyle, resolveArticleTheme } from "../../domain/knowledge/themes";
 import { Arrow, Group, Layer, Rect, Stage, Text, Transformer } from "react-konva";
-import type Konva from "konva";
+import Konva from "konva";
 import { createImageAsset } from "./assets/uploadImage";
 import {
   estimatePastedTableLayout,
@@ -33,6 +33,9 @@ const toolLabels = [
   ["section", PanelsTopLeft, "Section"],
   ["hand", Hand, "Pan"],
 ] as const;
+
+const CANVAS_BODY_FONT = '"IBM Plex Sans", Inter, system-ui, sans-serif';
+const CANVAS_CODE_FONT = '"IBM Plex Mono", "SFMono-Regular", Consolas, monospace';
 
 function isBodyTextBlock(object: { type: string; role?: string } | null | undefined) {
   return Boolean(object && (object.type === "text" || object.type === "note") && object.role !== "heading");
@@ -74,6 +77,18 @@ function measureTextEditorContent(editor: HTMLTextAreaElement) {
     width: Math.ceil(textWidth + horizontalChrome),
     height: Math.ceil(Math.max(1, lines.length) * lineHeight + verticalChrome),
   };
+}
+
+function measureCanvasBodyTextHeight(text: string, width: number, presentation?: CanvasObject["presentation"]) {
+  const probe = new Konva.Text({
+    text,
+    width: Math.max(1, width - 24),
+    fontSize: 14,
+    fontFamily: presentation === "code" ? CANVAS_CODE_FONT : CANVAS_BODY_FONT,
+    lineHeight: presentation === "code" ? 1.45 : 1.35,
+    wrap: "word",
+  });
+  return Math.ceil(probe.height() + 20);
 }
 
 function Toolbar() {
@@ -531,9 +546,18 @@ function CanvasStage() {
     }
     const measured = measureTextEditorContent(editor);
     if (measured) {
+      const state = useDocumentStore.getState();
+      const current = state.layout[editingId];
+      const object = state.document.objects.find(item => item.id === editingId);
+      const section = object?.sectionId ? state.layout[object.sectionId] : undefined;
+      const desiredWidth = Math.max(48, measured.width);
+      const maxWidth = current && section
+        ? Math.max(48, section.x + section.width - 24 - current.x)
+        : desiredWidth;
+      const width = Math.min(desiredWidth, maxWidth);
       updateLayout(editingId, {
-        width: Math.max(48, measured.width),
-        height: Math.max(36, measured.height),
+        width,
+        height: Math.max(36, measureCanvasBodyTextHeight(editor.value, width, object?.presentation)),
       });
     }
     setEditingId(null);
@@ -824,6 +848,7 @@ function CanvasStage() {
                         text={cell}
                         fill={canvasTheme?.ink}
                         fontSize={14}
+                        fontFamily={CANVAS_BODY_FONT}
                         fontStyle={rowIndex === 0 ? "bold" : "normal"}
                         lineHeight={1.35}
                         verticalAlign="middle"
@@ -882,7 +907,7 @@ function CanvasStage() {
                   text={object.text ?? ""}
                   fill={canvasTheme?.ink}
                   fontSize={14}
-                  fontFamily={object.presentation === "code" ? "monospace" : undefined}
+                  fontFamily={object.presentation === "code" ? CANVAS_CODE_FONT : CANVAS_BODY_FONT}
                   lineHeight={object.presentation === "code" ? 1.45 : 1.35}
                 />
               </Group>
