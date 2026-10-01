@@ -59,6 +59,61 @@ test("Resizing an upper block pushes overlapping blocks below it", () => {
   state.updateLayout("top", { height: 120 });
   assert.equal(useDocumentStore.getState().layout.bottom.y, 246);
 });
+test("Shrinking an upper block pulls its pushed chain back up", () => {
+  const article = structuredClone(seedArticles[0]);
+  article.document.objects = [
+    { id: "section", type: "section", title: "Section", order: 1 },
+    { id: "top", type: "text", text: "Top", sectionId: "section" },
+    { id: "middle", type: "note", text: "Middle", sectionId: "section" },
+    { id: "bottom", type: "text", text: "Bottom", sectionId: "section" },
+  ];
+  article.layout = {
+    section: { x: 100, y: 80, width: 500, height: 360 },
+    top: { x: 124, y: 110, width: 452, height: 120 },
+    middle: { x: 124, y: 246, width: 452, height: 60 },
+    bottom: { x: 124, y: 322, width: 452, height: 50 },
+  };
+  const state = useDocumentStore.getState();
+  state.loadArticle(article);
+  state.updateLayout("top", { height: 40 });
+  assert.equal(useDocumentStore.getState().layout.middle.y, 166);
+  assert.equal(useDocumentStore.getState().layout.bottom.y, 242);
+});
+test("Deleting a block closes only the space it occupied", () => {
+  const article = structuredClone(seedArticles[0]);
+  article.document.objects = [
+    { id: "section", type: "section", title: "Section", order: 1 },
+    { id: "top", type: "text", text: "Top", sectionId: "section" },
+    { id: "bottom", type: "note", text: "Bottom", sectionId: "section" },
+  ];
+  article.layout = {
+    section: { x: 100, y: 80, width: 500, height: 260 },
+    top: { x: 124, y: 110, width: 452, height: 40 },
+    bottom: { x: 124, y: 166, width: 452, height: 60 },
+  };
+  const state = useDocumentStore.getState();
+  state.loadArticle(article);
+  state.setSelected("top");
+  state.deleteSelected();
+  assert.equal(useDocumentStore.getState().layout.bottom.y, 110);
+});
+test("Moving a block out of a column closes its old vertical gap", () => {
+  const article = structuredClone(seedArticles[0]);
+  article.document.objects = [
+    { id: "section", type: "section", title: "Section", order: 1 },
+    { id: "moving", type: "image", text: "Moving", sectionId: "section" },
+    { id: "bottom", type: "text", text: "Bottom", sectionId: "section" },
+  ];
+  article.layout = {
+    section: { x: 100, y: 80, width: 600, height: 280 },
+    moving: { x: 124, y: 110, width: 120, height: 40 },
+    bottom: { x: 124, y: 166, width: 120, height: 60 },
+  };
+  const state = useDocumentStore.getState();
+  state.loadArticle(article);
+  state.updateLayout("moving", { x: 420 });
+  assert.equal(useDocumentStore.getState().layout.bottom.y, 110);
+});
 test("Right-aligned text blocks stay fitted to the section while moving", () => {
   const article = structuredClone(seedArticles[0]);
   article.document.objects = [

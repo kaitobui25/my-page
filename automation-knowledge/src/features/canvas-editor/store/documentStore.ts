@@ -146,6 +146,56 @@ function reflowSectionBelow(document: EditorDocument, layout: LayoutMap, objectI
   return moved;
 }
 
+function compactVacatedSpace(
+  document: EditorDocument,
+  layout: LayoutMap,
+  sectionId: string,
+  previousItem: LayoutMap[string],
+  releaseAmount: number,
+  excludedId?: string
+) {
+  if (releaseAmount < 0.5) return layout;
+
+  const memberIds = document.objects
+    .filter(object => object.sectionId === sectionId && object.id !== excludedId && layout[object.id])
+    .map(object => object.id);
+  const affected = new Set<string>();
+  const queue: LayoutMap[string][] = [previousItem];
+
+  while (queue.length) {
+    const source = queue.shift();
+    if (!source) break;
+    for (const id of memberIds) {
+      if (affected.has(id)) continue;
+      const candidate = layout[id];
+      if (!candidate || candidate.y < source.y + source.height || !overlapsHorizontally(source, candidate)) continue;
+      affected.add(id);
+      queue.push(candidate);
+    }
+  }
+
+  if (!affected.size) return layout;
+  const moved = { ...layout };
+  const allSectionIds = document.objects
+    .filter(object => object.sectionId === sectionId && layout[object.id])
+    .map(object => object.id);
+
+  for (const id of [...affected].sort((a, b) => layout[a].y - layout[b].y)) {
+    const original = layout[id];
+    let minimumY = previousItem.y;
+    for (const blockerId of allSectionIds) {
+      if (blockerId === id) continue;
+      const blocker = moved[blockerId];
+      if (!blocker || blocker.y >= original.y || !overlapsHorizontally(blocker, original)) continue;
+      minimumY = Math.max(minimumY, blocker.y + blocker.height + BLOCK_VERTICAL_GAP);
+    }
+    const y = Math.max(minimumY, original.y - releaseAmount);
+    if (y < original.y) moved[id] = { ...original, y };
+  }
+
+  return moved;
+}
+
 function reflowSectionsBelow(document: EditorDocument, layout: LayoutMap, sectionId: string) {
   const source = layout[sectionId];
   if (!source) return layout;
@@ -399,6 +449,27 @@ export const useDocumentStore = create<EditorState>((set, get) => ({
           state.layout[object.sectionId],
           !widthChanged
         );
+        const currentItem = layout[id];
+        if (currentItem) {
+          const positionChanged =
+            Math.abs(currentItem.x - previousItem.x) >= 0.5 ||
+            Math.abs(currentItem.y - previousItem.y) >= 0.5;
+          const widthShrank = currentItem.width < previousItem.width - 0.5;
+          const heightShrank = currentItem.height < previousItem.height - 0.5;
+          const releaseAmount = positionChanged || widthShrank
+            ? previousItem.height + BLOCK_VERTICAL_GAP
+            : heightShrank
+              ? previousItem.height - currentItem.height
+              : 0;
+          layout = compactVacatedSpace(
+            state.document,
+            layout,
+            object.sectionId,
+            previousItem,
+            releaseAmount,
+            id
+          );
+        }
         layout = reflowSectionBelow(state.document, layout, id);
       }
 
@@ -468,15 +539,29 @@ export const useDocumentStore = create<EditorState>((set, get) => ({
   deleteSelected: () =>
     set((state) => {
       if (!state.selectedId) return state;
+      const selected = state.document.objects.find(object => object.id === state.selectedId);
+      const selectedLayout = state.layout[state.selectedId];
+      const document = {
+        ...state.document,
+        objects: state.document.objects
+          .filter((object) => object.id !== state.selectedId)
+          .map(object => object.sectionId === state.selectedId ? { ...object, sectionId: undefined } : object),
+      };
       const nextLayout = { ...state.layout };
       delete nextLayout[state.selectedId];
+      const layout = selected?.sectionId && selectedLayout
+        ? compactVacatedSpace(
+            document,
+            nextLayout,
+            selected.sectionId,
+            selectedLayout,
+            selectedLayout.height + BLOCK_VERTICAL_GAP
+          )
+        : nextLayout;
       return {
         ...withHistory(state),
-        document: {
-          ...state.document,
-          objects: state.document.objects.filter((object) => object.id !== state.selectedId).map(object => object.sectionId === state.selectedId ? { ...object, sectionId: undefined } : object),
-        },
-        layout: nextLayout,
+        document,
+        layout,
         selectedId: null,
         dirty: true,
       };
