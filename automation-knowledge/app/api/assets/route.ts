@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { getArticleAssetPrefix, isSafeStorageSegment } from "@/domain/knowledge/storage/articleAssets";
+import { RUNTIME_IMAGE_VARIANT_NAMES } from "@/domain/knowledge/images/policy";
 
-const IMAGE_VARIANTS = new Set(["original", "400", "1200", "2200"]);
+const IMAGE_VARIANTS = new Set<string>(RUNTIME_IMAGE_VARIANT_NAMES);
 const IMAGE_CONTENT_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
 

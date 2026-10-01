@@ -1,6 +1,7 @@
 "use client";
 
 import type { AssetRecord } from "../../../domain/knowledge/types";
+import { DEFAULT_RUNTIME_WEBP_QUALITY, getRuntimeImageDerivative } from "../../../domain/knowledge/images/policy";
 
 async function blobToImage(blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -26,7 +27,11 @@ async function resizeImage(blob: Blob, maxWidth: number) {
   if (!context) throw new Error("Canvas is unavailable.");
   context.drawImage(image, 0, 0, width, height);
   const resized = await new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob((output) => (output ? resolve(output) : reject(new Error("Image resize failed."))), "image/webp", 0.88)
+    canvas.toBlob(
+      (output) => (output ? resolve(output) : reject(new Error("Image resize failed."))),
+      "image/webp",
+      DEFAULT_RUNTIME_WEBP_QUALITY / 100
+    )
   );
   return { blob: resized, width, height };
 }
@@ -46,9 +51,9 @@ export async function createImageAsset(articleId: string, file: Blob): Promise<A
   const id = crypto.randomUUID();
   const previewUrl = URL.createObjectURL(file);
   const original = await uploadVariant(articleId, id, "original", file);
-  const thumb = await resizeImage(file, 400);
-  const article = await resizeImage(file, 1200);
-  const zoom = await resizeImage(file, 2200);
+  const thumb = await resizeImage(file, getRuntimeImageDerivative("400").maxWidth);
+  const article = await resizeImage(file, getRuntimeImageDerivative("1200").maxWidth);
+  const zoom = await resizeImage(file, getRuntimeImageDerivative("2200").maxWidth);
   const [thumbUpload, articleUpload, zoomUpload] = await Promise.all([
     uploadVariant(articleId, id, "400", thumb.blob),
     uploadVariant(articleId, id, "1200", article.blob),
