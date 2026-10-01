@@ -14,7 +14,12 @@ const doc: EditorDocument = { articleId: "test", title: "Title", objects: [secti
 const layout: LayoutMap = { a: { x: 100, y: 0, width: 10, height: 10 }, b: { x: 0, y: 10, width: 10, height: 10 }, c: { x: 0, y: 50, width: 10, height: 10 } };
 test("Auto order groups rows and sorts left to right", () => { const md = buildMarkdown(doc, layout); assert.ok(md.indexOf("> B") < md.indexOf("\n\nA")); assert.ok(md.indexOf("\n\nA") < md.indexOf("\n\nC")); });
 test("Manual order retains newly added objects", () => { const manual = structuredClone(doc); manual.objects[0].readerMode = "manual"; manual.objects[0].readerOrder = ["c", "a"]; const md = buildMarkdown(manual, layout); assert.ok(md.indexOf("\n\nC") < md.indexOf("\n\nA")); assert.ok(md.includes("> B")); });
-test("Multiline notes remain blockquotes", () => assert.ok(buildMarkdown(doc, layout).includes("> B\n> Second line")));
+test("Multiline notes remain blockquotes with line breaks through reader parsing", () => {
+  const markdown = buildMarkdown(doc, layout);
+  assert.ok(markdown.includes("> B\n> Second line"));
+  const quote = markdownToBlocks(markdown).find(block => block.type === "quote");
+  assert.equal(quote?.text, "B\nSecond line");
+});
 test("Images reference real asset URLs, not invented paths", () => { const imageDoc = structuredClone(doc); imageDoc.objects.push({ id: "img", type: "image", assetId: "asset", text: "Screen" }); assert.ok(buildMarkdown(imageDoc, layout, { asset: { id: "asset", original: "/api/assets/original.png", optimized1200: "/api/assets/article.webp" } }).includes("![Screen](/api/assets/article.webp#object=img)")); });
 test("Hidden objects and arrows are excluded", () => { const hidden = structuredClone(doc); hidden.objects[1].reader = false; hidden.objects.push({ id: "arrow", type: "arrow", text: "Arrow text" }); const md = buildMarkdown(hidden, layout); assert.ok(!md.includes("\n\nA")); assert.ok(!md.includes("Arrow text")); });
 test("Pasted ChatGPT table text keeps rows and readable columns", () => {
