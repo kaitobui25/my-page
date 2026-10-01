@@ -295,6 +295,10 @@ a.chip:hover, a.chip:focus-visible { border-color: var(--color-accent); color: v
   --article-theme-h2: var(--article-light-h2, var(--color-ink-soft));
   --article-paper-quote: color-mix(in srgb, var(--article-theme-h1) 8%, var(--article-paper));
   --article-paper-frame: color-mix(in srgb, var(--article-paper-ink) 18%, transparent);
+  --article-pasted-surface: color-mix(in srgb, var(--article-paper-ink) 8%, var(--article-paper));
+  --article-pasted-border: color-mix(in srgb, var(--article-paper-ink) 20%, transparent);
+  --article-pasted-ink: color-mix(in srgb, var(--article-paper-ink) 62%, var(--article-paper));
+  --article-pasted-divider: color-mix(in srgb, var(--article-paper-ink) 10%, transparent);
 }
 
 [data-theme="dark"] .article-main,
@@ -370,6 +374,22 @@ a.chip:hover, a.chip:focus-visible { border-color: var(--color-accent); color: v
   white-space: pre-wrap;
 }
 
+.article-body .article-pasted {
+  border-left-color: var(--article-pasted-border);
+  background: var(--article-pasted-surface);
+  color: var(--article-pasted-ink);
+  font-size: var(--notebook-pasted-size);
+}
+
+.article-body .article-pasted th {
+  color: var(--article-pasted-ink);
+}
+
+.article-body .article-pasted th,
+.article-body .article-pasted td {
+  border-bottom-color: var(--article-pasted-divider);
+}
+
 .article-table-wrap {
   max-width: 100%;
   margin: var(--space-6) 0;
@@ -382,6 +402,14 @@ a.chip:hover, a.chip:focus-visible { border-color: var(--color-accent); color: v
   font-family: var(--font-sans);
   font-size: 0.94em;
   line-height: 1.45;
+}
+
+.article-note-table table {
+  font-family: inherit;
+  font-size: 1em;
+  font-style: inherit;
+  font-weight: inherit;
+  line-height: inherit;
 }
 
 .article-table-wrap th,

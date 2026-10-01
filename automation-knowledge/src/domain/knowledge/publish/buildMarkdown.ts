@@ -4,6 +4,7 @@ type ReaderBlock =
   | { type: "heading"; level: 1 | 2 | 3; text: string }
   | { type: "paragraph"; text: string }
   | { type: "blockquote"; text: string }
+  | { type: "pasted"; text: string }
   | { type: "image"; alt: string; src: string; objectId: string };
 
 function getSectionOrder(section: CanvasObject) {
@@ -54,6 +55,9 @@ function blocksForObject(
         text: `${number} ${object.text ?? ""}`.trim(),
       }];
     }
+    if (object.presentation === "plain" || object.presentation === "table") {
+      return [{ type: "pasted", text: object.text ?? "" }];
+    }
     return [{ type: "paragraph", text: object.text ?? "" }];
   }
   if (object.type === "note") return [{ type: "blockquote", text: object.text ?? "" }];
@@ -75,6 +79,7 @@ function serialize(blocks: ReaderBlock[]) {
     .map((block) => {
       if (block.type === "heading") return `${"#".repeat(block.level)} ${block.text}`;
       if (block.type === "blockquote") return block.text.split("\n").map(line => `> ${line}`).join("\n");
+      if (block.type === "pasted") return ["[!paste]", ...block.text.split("\n")].map(line => `> ${line}`).join("\n");
       if (block.type === "image") return `![${block.alt}](${block.src}#object=${encodeURIComponent(block.objectId)})`;
       return block.text;
     })

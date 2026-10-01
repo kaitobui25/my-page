@@ -51,6 +51,7 @@
   --notebook-note-weight: 300;
   --notebook-note-style: italic;
   --notebook-note-line-height: 1.55;
+  --notebook-pasted-size: var(--text-meta);
   --notebook-paper-shadow: 0 18px 50px rgba(48, 39, 27, 0.08);
   --notebook-image-frame: rgba(70, 63, 54, 0.16);
   --notebook-image-shadow: 0 6px 18px rgba(48, 39, 27, 0.07);

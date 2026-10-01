@@ -34,6 +34,36 @@ test("Pasted ChatGPT table text keeps rows and readable columns", () => {
   const blocks = markdownToBlocks(markdown);
   assert.equal(blocks[0]?.type, "table");
 });
+test("Pasted plain text publishes with note treatment", () => {
+  const article = structuredClone(seedArticles[0]);
+  article.document.objects = [
+    { id: "section", type: "section", title: "Section", order: 1 },
+    { id: "plain", type: "text", presentation: "plain", text: "Pasted\ntext", sectionId: "section" },
+  ];
+  article.layout = {
+    section: { x: 100, y: 80, width: 500, height: 220 },
+    plain: { x: 124, y: 110, width: 300, height: 60 },
+  };
+  const markdown = buildMarkdown(article.document, article.layout);
+  assert.ok(markdown.includes("> [!paste]\n"));
+  assert.ok(markdown.includes("> Pasted\n> text"));
+  assert.equal(markdownToBlocks(markdown).find(block => block.type === "paste")?.text, "Pasted\ntext");
+});
+test("Pasted tables publish as tables inside note treatment", () => {
+  const rows = [["A", "B"], ["1", "2"]];
+  const article = structuredClone(seedArticles[0]);
+  article.document.objects = [
+    { id: "section", type: "section", title: "Section", order: 1 },
+    { id: "table", type: "text", presentation: "table", text: markdownTableFromRows(rows), sectionId: "section" },
+  ];
+  article.layout = {
+    section: { x: 100, y: 80, width: 500, height: 220 },
+    table: { x: 124, y: 110, width: 360, height: 100 },
+  };
+  const markdown = buildMarkdown(article.document, article.layout);
+  const pastedTable = markdownToBlocks(markdown).find(block => block.type === "pasteTable");
+  assert.deepEqual(pastedTable?.rows, rows);
+});
 test("Pasted plain text preserves indentation and receives a usable block size", () => {
   const pasted = normalizePastedText("\n  PLC Master\nRX  <-----  Remote device\n");
   assert.equal(pasted, "  PLC Master\nRX  <-----  Remote device");
