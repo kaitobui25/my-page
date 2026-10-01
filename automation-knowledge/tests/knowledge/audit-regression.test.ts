@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildMarkdown } from "../../src/domain/knowledge/publish/buildMarkdown";
+import { markdownTableFromRows, parseMarkdownTable } from "../../src/domain/knowledge/format/markdownTable";
+import { markdownToBlocks } from "../../src/domain/knowledge/read/markdown";
 import { useDocumentStore } from "../../src/features/canvas-editor/store/documentStore";
 import { seedArticles } from "../../src/domain/knowledge/seed";
 import { saveDraft } from "../../src/features/canvas-editor/persistence/autosave";
+import { estimatePastedTextLayout, normalizePastedText, tabSeparatedRows } from "../../src/features/canvas-editor/clipboard/pastedText";
 import type { CanvasObject, EditorDocument, LayoutMap } from "../../src/domain/knowledge/types";
 
 const section: CanvasObject = { id: "s", type: "section", title: "Section", order: 1 };
@@ -14,6 +17,25 @@ test("Manual order retains newly added objects", () => { const manual = structur
 test("Multiline notes remain blockquotes", () => assert.ok(buildMarkdown(doc, layout).includes("> B\n> Second line")));
 test("Images reference real asset URLs, not invented paths", () => { const imageDoc = structuredClone(doc); imageDoc.objects.push({ id: "img", type: "image", assetId: "asset", text: "Screen" }); assert.ok(buildMarkdown(imageDoc, layout, { asset: { id: "asset", original: "/api/assets/original.png", optimized1200: "/api/assets/article.webp" } }).includes("![Screen](/api/assets/article.webp#object=img)")); });
 test("Hidden objects and arrows are excluded", () => { const hidden = structuredClone(doc); hidden.objects[1].reader = false; hidden.objects.push({ id: "arrow", type: "arrow", text: "Arrow text" }); const md = buildMarkdown(hidden, layout); assert.ok(!md.includes("\n\nA")); assert.ok(!md.includes("Arrow text")); });
+test("Pasted ChatGPT table text keeps rows and readable columns", () => {
+  const rows = tabSeparatedRows("\nKý hiệu\tHiểu đơn giản\tLoại dữ liệu\r\nRX\tnhận về\tbit ON/OFF\r\nRY\tgửi đi\tbit ON/OFF\n");
+  assert.deepEqual(rows, [
+    ["Ký hiệu", "Hiểu đơn giản", "Loại dữ liệu"],
+    ["RX", "nhận về", "bit ON/OFF"],
+    ["RY", "gửi đi", "bit ON/OFF"],
+  ]);
+  const markdown = markdownTableFromRows(rows ?? []);
+  assert.deepEqual(parseMarkdownTable(markdown)?.rows, rows);
+  const blocks = markdownToBlocks(markdown);
+  assert.equal(blocks[0]?.type, "table");
+});
+test("Pasted plain text preserves indentation and receives a usable block size", () => {
+  const pasted = normalizePastedText("\n  PLC Master\nRX  <-----  Remote device\n");
+  assert.equal(pasted, "  PLC Master\nRX  <-----  Remote device");
+  const size = estimatePastedTextLayout(pasted, 420);
+  assert.ok(size.width >= 220 && size.width <= 420);
+  assert.ok(size.height >= 58);
+});
 test("Moving a section moves its members in one undo action", () => { const state = useDocumentStore.getState(); state.loadArticle(structuredClone(seedArticles[0])); const before = structuredClone(useDocumentStore.getState().layout); state.updateLayout("sec_problem", { x: before.sec_problem.x + 50 }); assert.equal(useDocumentStore.getState().layout.txt_problem.x, before.txt_problem.x + 50); state.undo(); assert.deepEqual(useDocumentStore.getState().layout, before); state.redo(); assert.equal(useDocumentStore.getState().layout.txt_problem.x, before.txt_problem.x + 50); });
 test("Resizing an upper block pushes overlapping blocks below it", () => {
   const article = structuredClone(seedArticles[0]);

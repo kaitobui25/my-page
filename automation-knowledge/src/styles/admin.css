@@ -176,6 +176,11 @@
   background: var(--note-surface);
 }
 
+.canvas-code-edit {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  line-height: 1.45;
+}
+
 .canvas-section-heading-edit {
   position: absolute;
   z-index: 12;

@@ -33,6 +33,7 @@ export type CanvasObject = {
   sectionId?: string;
   text?: string;
   role?: "heading" | "body";
+  presentation?: "plain" | "table" | "code";
   imageId?: string;
   assetId?: string;
   fromObjectId?: string;

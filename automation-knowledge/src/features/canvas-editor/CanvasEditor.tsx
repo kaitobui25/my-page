@@ -5,12 +5,20 @@ import Link from "next/link";
 import { Hand, ImagePlus, MousePointer2, MoveUpRight, PanelsTopLeft, StickyNote, Type } from "lucide-react";
 import { saveDraft, subscribeAutosave } from "./persistence/autosave";
 import { ArticleBody } from "../../components/article-reader/ArticleBody";
+import { markdownTableFromRows, parseMarkdownTable } from "../../domain/knowledge/format/markdownTable";
 import { buildMarkdown } from "../../domain/knowledge/publish/buildMarkdown";
-import type { AnnotationColor, KnowledgeArticle } from "../../domain/knowledge/types";
+import type { AnnotationColor, CanvasObject, KnowledgeArticle } from "../../domain/knowledge/types";
 import { ARTICLE_THEME_OPTIONS, getArticleThemeStyle, resolveArticleTheme } from "../../domain/knowledge/themes";
 import { Arrow, Group, Layer, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import { createImageAsset } from "./assets/uploadImage";
+import {
+  estimatePastedTableLayout,
+  estimatePastedTextLayout,
+  measureCanvasTable,
+  normalizePastedText,
+  tabSeparatedRows,
+} from "./clipboard/pastedText";
 import { CanvasImage } from "./objects/CanvasImage";
 import { DEFAULT_SECTION_HEIGHT, useDocumentStore } from "./store/documentStore";
 import { ThemeToggle } from "../../components/theme/ThemeToggle";
@@ -106,6 +114,84 @@ async function insertImage(file: Blob, point?: { x: number; y: number }) {
     useDocumentStore.setState(current => ({ assets: { ...current.assets, [id]: { ...uploaded, id } }, dirty: true }));
     URL.revokeObjectURL(previewUrl);
   } catch { useDocumentStore.getState().setSaveState("failed"); }
+}
+
+function clipboardContent(data: DataTransfer): { text: string; presentation: NonNullable<CanvasObject["presentation"]> } | null {
+  const html = data.getData("text/html");
+  if (html) {
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+    const table = parsed.querySelector("table");
+    if (table) {
+      const rows = Array.from(table.querySelectorAll("tr"))
+        .map(row => Array.from(row.querySelectorAll(":scope > th, :scope > td"))
+          .map(cell => normalizePastedText(cell.textContent ?? "")))
+        .filter(row => row.some(cell => cell.trim()));
+      const text = markdownTableFromRows(rows);
+      if (text) return { text, presentation: "table" };
+    }
+
+    const pre = parsed.querySelector("pre");
+    if (pre) {
+      const text = normalizePastedText(pre.textContent ?? "");
+      if (text) return { text, presentation: "code" };
+    }
+  }
+
+  const plain = normalizePastedText(data.getData("text/plain"));
+  if (!plain) return null;
+  const markdownTable = parseMarkdownTable(plain);
+  if (markdownTable) return { text: markdownTableFromRows(markdownTable.rows), presentation: "table" };
+  const tabular = tabSeparatedRows(plain);
+  if (tabular) return { text: markdownTableFromRows(tabular), presentation: "table" };
+  return { text: plain, presentation: "plain" };
+}
+
+function insertPastedText(
+  text: string,
+  point?: { x: number; y: number },
+  presentation: NonNullable<CanvasObject["presentation"]> = "plain"
+) {
+  const state = useDocumentStore.getState();
+  const position = point ?? {
+    x: (160 - state.camera.x) / state.zoom,
+    y: (120 - state.camera.y) / state.zoom,
+  };
+  const section = state.document.objects.find(object => {
+    if (object.type !== "section") return false;
+    const item = state.layout[object.id];
+    return Boolean(item && position.x >= item.x && position.x <= item.x + item.width && position.y >= item.y && position.y <= item.y + item.height);
+  });
+  const sectionLayout = section ? state.layout[section.id] : undefined;
+  const sectionPadding = 24;
+  const minPasteWidth = 220;
+  const x = sectionLayout
+    ? Math.max(
+        sectionLayout.x + sectionPadding,
+        Math.min(position.x, sectionLayout.x + sectionLayout.width - sectionPadding - minPasteWidth)
+      )
+    : position.x;
+  const maxWidth = sectionLayout
+    ? Math.max(48, sectionLayout.x + sectionLayout.width - sectionPadding - x)
+    : 720;
+  const table = presentation === "table" ? parseMarkdownTable(text) : null;
+  const dimensions = table
+    ? estimatePastedTableLayout(table.rows, maxWidth)
+    : estimatePastedTextLayout(text, maxWidth);
+  const id = `text_${crypto.randomUUID()}`;
+
+  state.addObject(
+    {
+      id,
+      type: "text",
+      role: "body",
+      sectionId: section?.id,
+      reader: true,
+      text,
+      presentation,
+    },
+    { x, y: position.y, ...dimensions, zIndex: 2 }
+  );
+  useDocumentStore.getState().updateLayout(id, {}, false);
 }
 
 function Inspector() {
@@ -247,8 +333,6 @@ function CanvasStage() {
   const addObject = useDocumentStore((state) => state.addObject);
   const insertHeading = useDocumentStore((state) => state.insertHeading);
   const updateLayout = useDocumentStore((state) => state.updateLayout);
-  const addImageAsset = useDocumentStore((state) => state.addImageAsset);
-  const articleId = useDocumentStore((state) => state.articleId);
   const stageRef = useRef<Konva.Stage>(null);
   const editRef = useRef<HTMLTextAreaElement | null>(null);
   const headingInsertCloseTimer = useRef<number | null>(null);
@@ -348,17 +432,28 @@ function CanvasStage() {
 
   useEffect(() => {
     const onPaste = async (event: ClipboardEvent) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (target?.closest("input, textarea, [contenteditable=true]")) return;
+
       const item = Array.from(event.clipboardData?.items ?? []).find((entry) =>
         entry.type.startsWith("image/")
       );
       const file = item?.getAsFile();
-      if (!file) return;
+      const point = stageRef.current?.getRelativePointerPosition() ?? undefined;
+      if (file) {
+        event.preventDefault();
+        await insertImage(file, point);
+        return;
+      }
+
+      const content = event.clipboardData ? clipboardContent(event.clipboardData) : null;
+      if (!content) return;
       event.preventDefault();
-      await insertImage(file, stageRef.current?.getRelativePointerPosition() ?? undefined);
+      insertPastedText(content.text, point, content.presentation);
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [addImageAsset, articleId]);
+  }, []);
 
   function addAtPointer(type: "text" | "note" | "section" | "arrow", x: number, y: number) {
     const id = `${type}_${crypto.randomUUID()}`;
@@ -416,6 +511,24 @@ function CanvasStage() {
 
   function finishTextEditing(editor: HTMLTextAreaElement) {
     if (!editingId) return;
+    if (editingObject?.presentation === "table") {
+      const table = parseMarkdownTable(editor.value);
+      if (table) {
+        const state = useDocumentStore.getState();
+        const current = state.layout[editingId];
+        const sectionId = state.document.objects.find(object => object.id === editingId)?.sectionId;
+        const section = sectionId ? state.layout[sectionId] : undefined;
+        const maxWidth = current && section
+          ? Math.max(120, section.x + section.width - 24 - current.x)
+          : Math.max(120, current?.width ?? 720);
+        const dimensions = estimatePastedTableLayout(table.rows, maxWidth);
+        state.updateObject(editingId, { text: markdownTableFromRows(table.rows), presentation: "table" }, false);
+        updateLayout(editingId, dimensions);
+        setEditingId(null);
+        return;
+      }
+      useDocumentStore.getState().updateObject(editingId, { presentation: "plain" }, false);
+    }
     const measured = measureTextEditorContent(editor);
     if (measured) {
       updateLayout(editingId, {
@@ -429,6 +542,7 @@ function CanvasStage() {
   function updateTextEditing(editor: HTMLTextAreaElement) {
     if (!editingId) return;
     useDocumentStore.getState().updateObject(editingId, { text: editor.value }, false);
+    if (editingObject?.presentation === "table") return;
 
     const measured = measureTextEditorContent(editor);
     const currentLayout = useDocumentStore.getState().layout[editingId];
@@ -478,7 +592,7 @@ function CanvasStage() {
       {editingId && editingLayout && editingObject && <textarea
         ref={editRef}
         autoFocus
-        className={`canvas-text-edit${editingObject.type === "note" ? " canvas-note-edit" : ""}`}
+        className={`canvas-text-edit${editingObject.type === "note" ? " canvas-note-edit" : ""}${editingObject.presentation === "code" ? " canvas-code-edit" : ""}`}
         style={{
           left: editingLayout.x * zoom + camera.x,
           top: editingLayout.y * zoom + camera.y,
@@ -654,6 +768,89 @@ function CanvasStage() {
                 </Group>
               );
             }
+            if (object.type === "text" && object.presentation === "table") {
+              const table = parseMarkdownTable(object.text ?? "");
+              if (table) {
+                const metrics = measureCanvasTable(table.rows, itemLayout.width);
+                const rowOffsets: number[] = [];
+                const columnOffsets: number[] = [];
+                let rowOffset = 0;
+                let columnOffset = 0;
+                for (const height of metrics.rowHeights) {
+                  rowOffsets.push(rowOffset);
+                  rowOffset += height;
+                }
+                for (const width of metrics.columnWidths) {
+                  columnOffsets.push(columnOffset);
+                  columnOffset += width;
+                }
+                return (
+                  <Group
+                    key={object.id}
+                    ref={(node) => {
+                      if (node) nodeRefs.current[object.id] = node;
+                    }}
+                    x={itemLayout.x}
+                    y={itemLayout.y}
+                    clipWidth={itemLayout.width}
+                    clipHeight={itemLayout.height}
+                    draggable={activeTool !== "hand"}
+                    onDblClick={event => { event.cancelBubble = true; setEditingId(object.id); }}
+                    onClick={(event) => {
+                      event.cancelBubble = true;
+                      setSelected(object.id);
+                    }}
+                    onDragEnd={(event) => updateLayout(object.id, { x: event.target.x(), y: event.target.y() })}
+                  >
+                    <Rect
+                      width={itemLayout.width}
+                      height={itemLayout.height}
+                      fill={canvasTheme?.surface}
+                      stroke={selectedId === object.id ? canvasTheme?.accent : canvasTheme?.line}
+                      cornerRadius={6}
+                    />
+                    <Rect
+                      width={itemLayout.width}
+                      height={Math.min(itemLayout.height, metrics.rowHeights[0] ?? 0)}
+                      fill={canvasTheme?.headingFill}
+                    />
+                    {table.rows.map((row, rowIndex) => row.map((cell, columnIndex) => (
+                      <Text
+                        key={`${rowIndex}-${columnIndex}`}
+                        x={(columnOffsets[columnIndex] ?? 0) + 12}
+                        y={(rowOffsets[rowIndex] ?? 0) + 8}
+                        width={Math.max(1, (metrics.columnWidths[columnIndex] ?? 0) - 24)}
+                        height={Math.max(1, (metrics.rowHeights[rowIndex] ?? 40) - 16)}
+                        text={cell}
+                        fill={canvasTheme?.ink}
+                        fontSize={14}
+                        fontStyle={rowIndex === 0 ? "bold" : "normal"}
+                        lineHeight={1.35}
+                        verticalAlign="middle"
+                      />
+                    )))}
+                    {metrics.columnWidths.slice(0, -1).map((_, index) => (
+                      <Rect
+                        key={`column-${index}`}
+                        x={columnOffsets[index + 1]}
+                        width={1}
+                        height={itemLayout.height}
+                        fill={canvasTheme?.line}
+                      />
+                    ))}
+                    {metrics.rowHeights.slice(0, -1).map((_, index) => (
+                      <Rect
+                        key={`row-${index}`}
+                        y={rowOffsets[index + 1]}
+                        width={itemLayout.width}
+                        height={1}
+                        fill={canvasTheme?.line}
+                      />
+                    ))}
+                  </Group>
+                );
+              }
+            }
             return (
               <Group
                 key={object.id}
@@ -685,7 +882,8 @@ function CanvasStage() {
                   text={object.text ?? ""}
                   fill={canvasTheme?.ink}
                   fontSize={14}
-                  lineHeight={1.35}
+                  fontFamily={object.presentation === "code" ? "monospace" : undefined}
+                  lineHeight={object.presentation === "code" ? 1.45 : 1.35}
                 />
               </Group>
             );
@@ -766,11 +964,15 @@ function CanvasStage() {
               const scaleY = node.scaleY();
               node.scaleX(1);
               node.scaleY(1);
+              const width = Math.max(48, item.width * scaleX);
+              const table = selectedObject?.presentation === "table"
+                ? parseMarkdownTable(selectedObject.text ?? "")
+                : null;
               updateLayout(selectedId, {
                 x: node.x(),
                 y: node.y(),
-                width: Math.max(48, item.width * scaleX),
-                height: Math.max(36, item.height * scaleY),
+                width,
+                height: table ? measureCanvasTable(table.rows, width).height : Math.max(36, item.height * scaleY),
               });
             }}
           />

@@ -365,6 +365,33 @@ a.chip:hover, a.chip:focus-visible { border-color: var(--color-accent); color: v
   padding: var(--space-5) var(--space-6);
 }
 
+.article-table-wrap {
+  max-width: 100%;
+  margin: var(--space-6) 0;
+  overflow-x: auto;
+}
+
+.article-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: 0.94em;
+  line-height: 1.45;
+}
+
+.article-table-wrap th,
+.article-table-wrap td {
+  border-bottom: 1px solid color-mix(in srgb, var(--article-paper-ink) 14%, transparent);
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  vertical-align: top;
+}
+
+.article-table-wrap th {
+  color: var(--article-paper-ink);
+  font-weight: 650;
+}
+
 .article-main .breadcrumb,
 .article-main .meta-line {
   color: var(--article-paper-ink-soft);

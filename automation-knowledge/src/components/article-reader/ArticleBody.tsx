@@ -8,6 +8,20 @@ export function ArticleBody({ markdown, article }: { markdown: string; article?:
     if (block.type === "h2") return <h2 id={`heading-${index}`} key={index}>{block.text}</h2>;
     if (block.type === "h3") return <h3 id={`heading-${index}`} key={index}>{block.text}</h3>;
     if (block.type === "quote") return <blockquote key={index}>{block.text}</blockquote>;
+    if (block.type === "table") return (
+      <div className="article-table-wrap" key={index}>
+        <table>
+          <thead>
+            <tr>{block.rows[0]?.map((cell, cellIndex) => <th key={cellIndex}>{cell}</th>)}</tr>
+          </thead>
+          <tbody>
+            {block.rows.slice(1).map((row, rowIndex) => (
+              <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
     if (block.type === "image") {
       const match = /^!\[(.*)\]\(([^\s]+)\)$/.exec(block.text);
       if (match && match[2].startsWith("/api/assets/")) {
