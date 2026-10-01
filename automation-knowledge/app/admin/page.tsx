@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AdminArticleCard } from "@/features/admin/articles/AdminArticleCard";
+import { StorageActions } from "@/features/admin/StorageActions";
 import { listDrafts } from "@/domain/knowledge/read/server";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,7 @@ export default async function AdminPage() {
       <section className="topic-main">
         <p className="section-label">Dashboard</p>
         <h1 className="article-title">Admin</h1>
+        <StorageActions />
         <div className="article-list">
           <Link className="article-card" href="/admin/new?fresh=1">
             <h3>+ New Article</h3>
